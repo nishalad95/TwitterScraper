@@ -10,11 +10,11 @@ from argparse import ArgumentParser
 
 
 parser = ArgumentParser(
-        description="Scrape twitter API for a hashtag")
+        description="Scrape twitter API for a hashtag or keyword")
 parser.add_argument(
-        '--hashtag',
+        '--query',
 	'-t',
-        help="hashtag to scrape for")
+        help="query to scrape for")
 parser.add_argument(
         '--filename',
         '-f',
@@ -31,21 +31,16 @@ parser.add_argument(
         '--config',
         '-c',
         help='config file containing twitter api authentication')
-parser.add_argument(
-        '--lang',
-        '-l',
-        help='language to scrape twitter')
 
 
 # grab command line args
 args = parser.parse_args()
 #hashtag = '#' + args.hashtag
-hashtag = args.hashtag
+query = args.query
 filename = args.filename
 config = args.config
 since = args.since
 until = args.until
-lang = args.lang
 
 
 with open(config, 'r') as ymlfile:
@@ -72,35 +67,31 @@ csvFile = open(filename, append_write)
 csvWriter = csv.writer(csvFile)
 
 
-def on_status(status):
-    tweet = ""
-    
-    if hasattr(status, 'retweeted_status'):
-        try:
-            tweet = status.retweeted_status.extended_tweet["full_text"]
-        except:
-            tweet = status.retweeted_status.text
-    else:
-        try:
-            tweet = status.extended_tweet["full_text"]
-        except AttributeError:
-            tweet = status.text
-    
-    return tweet
+column_headers = ['created_at', 'tweet_id', 'text', 'entities', 'source', 'user', 'user.id', 'user.screen_name', 'user.location', 'user.followers_count', 'user.friends_count', 'user.created_at', 'user.favourites_count', 'user.statuses_count', 'user.verified', 'coordinates', 'place', 'retweet_count', 'favorite_count', 'favorited']
+
+csvWriter.writerow(column_headers)
 
 
 
-endTime = datetime.datetime.now() + datetime.timedelta(minutes=20)
-for i, tweet in enumerate(tweepy.Cursor(api.search,q=hashtag,count=200,
-                           lang=lang,
+endTime = datetime.datetime.now() + datetime.timedelta(minutes=10)
+for i, tweet in enumerate(tweepy.Cursor(api.search,
+			   q=query,count=200,
+                           lang="en",
                            since=since,
-                           until=until).items()):
+                           until=until,
+			   tweet_mode='extended').items()):
 
-    tweets_encoded = tweet.text.encode('utf-8')
+    tweets_encoded = tweet.full_text.encode('utf-8')
     tweets_decoded = tweets_encoded.decode('utf-8')
-    csvWriter.writerow([tweet.created_at, tweet.id, tweets_decoded, tweet.entities, 
-                        tweet.source, tweet.user,
-                        tweet._json["user"]["id"], tweet._json["user"]["screen_name"], 
+    if (not tweet.retweeted) and ('RT @' not in tweets_decoded):
+        csvWriter.writerow([tweet.created_at, 
+			tweet.id, 
+			tweets_decoded, 
+			tweet.entities, 
+                        tweet.source, 
+			tweet.user,
+                        tweet._json["user"]["id"], 
+			tweet._json["user"]["screen_name"], 
                         tweet._json["user"]["location"], 
                         tweet._json["user"]["followers_count"], 
                         tweet._json["user"]["friends_count"],
@@ -108,14 +99,10 @@ for i, tweet in enumerate(tweepy.Cursor(api.search,q=hashtag,count=200,
                         tweet._json["user"]["favourites_count"],
                         tweet._json["user"]["statuses_count"],
                         tweet._json["user"]["verified"], 
-                        tweet._json["user"]["statuses_count"],
-                        tweet.geo, 
                         tweet.coordinates if tweet.coordinates else None, 
                         tweet.place.name if tweet.place else None, 
-                        on_status(tweet),
-                        # tweet._json["retweeted_status"] if tweet._json["retweeted_status"] else None,
-                        tweet.retweet_count, tweet.favorite_count, 
-                        tweet.retweeted,
+                        tweet.retweet_count, 
+			tweet.favorite_count,
                         tweet.favorited if tweet.favorited else None,
                         ])
 
